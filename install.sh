@@ -1,7 +1,7 @@
 #!/bin/sh
 
 printf "\033[32;1mInstalling packeges\033[0m\n"
-opkg update && opkg install curl kmod-nft-tproxy sing-box
+opkg update && opkg install curl kmod-nft-tproxy sing-box nano
 
 printf "\033[32;1mDownloading config.json\033[0m\n"
 curl -Lo /etc/sing-box/config.json https://raw.githubusercontent.com/ivszr/fast-sing-box/refs/heads/main/config.json
@@ -53,10 +53,11 @@ uci set firewall.@rule[-1].family='ipv4'
 uci commit firewall
 
 echo "chain tproxy_marked {" > /etc/nftables.d/30-sing-box-tproxy.nft
-echo "  type filter hook prerouting priority filter; policy accept;" >> /etc/nftables.d/30-xray-tproxy.nft
-echo "  meta mark 0x1 meta l4proto { tcp, udp } tproxy ip to 127.0.0.1:12701 counter accept" >> /etc/nftables.d/30-xray-tproxy.nft
+echo "  type filter hook prerouting priority filter; policy accept;" >> /etc/nftables.d/30-sing-box-tproxy.nft
+echo "  meta mark 0x1 meta l4proto { tcp, udp } tproxy ip to 127.0.0.1:12701 counter accept" >> /etc/nftables.d/30-sing-box-tproxy.nft
 echo "}" >> /etc/nftables.d/30-sing-box-tproxy.nft
 
+printf "\033[32;1mPlease adjust config and run service sing-box restart, Internet access unavailable wihout correct config\033[0m\n"
 service dnsmasq restart && service network restart && service firewall restart
 
 
