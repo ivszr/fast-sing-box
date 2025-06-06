@@ -11,7 +11,7 @@
     "servers": [
       {
         "tag": "cloudflare-doh-server",
-        "address": "https://1.1.1.1/dns-query",
+        "address": "https://dns.google/dns-query",
         "detour": "direct-out"
       }
     ]
