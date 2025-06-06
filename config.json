@@ -11,12 +11,6 @@
       "tcp_fast_open": true,
       "udp_fragment": true
     },
-    {
-      "tag": "dns-in",
-      "type": "direct",
-      "listen": "127.0.0.1",
-      "listen_port": 5353
-    }
   ],
   "outbounds": [
     {
