@@ -36,32 +36,6 @@ rule_id2=$(uci show firewall | grep -E '@rule.*name=.Fake IP via proxy.' | awk -
 if [ ! -z "$rule_id2" ]; then
     while uci -q delete firewall.@rule[$rule_id2]; do :; done
 fi
-printf "\033[32;1mConfigure dhcp\033[0m\n"
-configure_dhcp() {
-  is_noresolv_enabled=$(uci -q get dhcp.@dnsmasq[0].noresolv || echo "0")
-  is_filter_aaaa_enabled=$(uci -q get dhcp.@dnsmasq[0].filter_aaaa || echo "0")
-  dhcp_server=$(uci -q get dhcp.@dnsmasq[0].server || echo "")
-  dhcp_server_ip="127.0.0.1#5353"
-
-  if [ "$is_noresolv_enabled" -ne "1" ]; then
-    log_message "INFO" "Enabling noresolv option in DHCP config"
-    uci -q set dhcp.@dnsmasq[0].noresolv=1
-    uci commit dhcp
-  fi
-
-  if [ "$is_filter_aaaa_enabled" -ne "1" ]; then
-    log_message "INFO" "Enabling filter_aaaa option in DHCP config"
-    uci -q set dhcp.@dnsmasq[0].filter_aaaa=1
-    uci commit dhcp
-  fi
-
-  if [ "$dhcp_server" != "$dhcp_server_ip" ]; then
-    log_message "INFO" "Setting DHCP server to $dhcp_server_ip"
-    uci -q delete dhcp.@dnsmasq[0].server
-    uci -q add_list dhcp.@dnsmasq[0].server="$dhcp_server_ip"
-    uci commit dhcp
-  fi
-}
 
 uci add firewall rule
 uci set firewall.@rule[-1]=rule
