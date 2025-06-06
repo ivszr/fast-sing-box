@@ -2,6 +2,20 @@
   "log": {
     "level": "debug"
   },
+  "dns": {
+    "strategy": "ipv4_only",
+    "fakeip": {
+      "enabled": true,
+      "inet4_range": "198.18.0.0/15"
+    },
+    "servers": [
+      {
+        "tag": "cloudflare-doh-server",
+        "address": "https://1.1.1.1/dns-query",
+        "detour": "direct-out"
+      }
+    ]
+  },
   "inbounds": [
     {
       "tag": "tproxy-in",
@@ -10,9 +24,19 @@
       "listen_port": 12701,
       "tcp_fast_open": true,
       "udp_fragment": true
+    },
+    {
+      "tag": "dns-in",
+      "type": "direct",
+      "listen": "127.0.0.1",
+      "listen_port": 5353
     }
   ],
   "outbounds": [
+    {
+      "tag": "direct-out",
+      "type": "direct"
+    },
     {
       "flow": "xtls-rprx-vision",
       "packet_encoding": "xudp",
