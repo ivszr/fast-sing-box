@@ -10,7 +10,7 @@
     },
     "servers": [
       {
-        "tag": "cloudflare-doh-server",
+        "tag": "google",
         "address": "https://dns.google/dns-query",
         "detour": "direct-out"
       }
