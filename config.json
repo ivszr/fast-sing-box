@@ -11,7 +11,7 @@
     "servers": [
       {
         "tag": "google",
-        "address": "https://dns.google/dns-query",
+        "address": "https://8.8.8.8/dns-query",
         "detour": "direct-out"
       }
     ]
