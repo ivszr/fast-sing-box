@@ -2,20 +2,6 @@
   "log": {
     "level": "debug"
   },
-  "dns": {
-    "strategy": "ipv4_only",
-    "fakeip": {
-      "enabled": true,
-      "inet4_range": "198.18.0.0/15"
-    },
-    "servers": [
-      {
-        "tag": "google",
-        "address": "https://8.8.8.8/dns-query",
-        "detour": "direct-out"
-      }
-    ]
-  },
   "inbounds": [
     {
       "tag": "tproxy-in",
@@ -33,10 +19,6 @@
     }
   ],
   "outbounds": [
-    {
-      "tag": "direct-out",
-      "type": "direct"
-    },
     {
       "flow": "xtls-rprx-vision",
       "packet_encoding": "xudp",
