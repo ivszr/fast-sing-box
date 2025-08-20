@@ -45,20 +45,6 @@ jq -n \
 --arg sid "$SID" \
 '{
   log: { level: "debug" },
-
-  dns: {
-    servers: [
-      {
-        tag: "doh",
-        address: "https://1.1.1.1/dns-query",
-        address_resolver: "local",
-        strategy: "ipv4_only"
-      }
-    ],
-    disable_cache: false,
-    disable_expire: false
-  },
-
   inbounds: [
     {
       tag: "tproxy-in",
@@ -68,12 +54,6 @@ jq -n \
       tcp_fast_open: true,
       udp_fragment: true
     },
-    {
-      tag: "dns-in",
-      type: "dns",
-      listen: "127.0.0.1",
-      listen_port: 1053
-    }
   ],
 
   outbounds: [
@@ -95,12 +75,8 @@ jq -n \
       }
     }
   ],
-
   route: {
     auto_detect_interface: true,
-    rules: [
-      { protocol: "dns", outbound: "dns-out" }
-    ],
     final: "proxy"
   }
 }'
