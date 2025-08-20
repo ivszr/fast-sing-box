@@ -6,7 +6,7 @@ IFS= read -r input
 wrapped="'$input'"
 
 printf "\033[32;1mInstalling packages\033[0m\n"
-opkg update && opkg install curl kmod-nft-tproxy sing-box jq
+opkg update && opkg install curl kmod-nft-tproxy sing-box jq dnsproxy
 
 curl -Lo /tmp/gen.sh https://raw.githubusercontent.com/ivszr/fast-sing-box/refs/heads/main/gen.sh
 
@@ -66,11 +66,50 @@ uci set dhcp.@dnsmasq[0].cachesize="10000"
 uci set dhcp.@dnsmasq[0].min_cache_ttl="3600"
 uci set dhcp.@dnsmasq[0].max_cache_ttl="86400"
 uci -q del dhcp.@dnsmasq[0].server
-uci add_list dhcp.@dnsmasq[0].server="127.0.0.1#5353"
-uci add_list dhcp.@dnsmasq[0].server="::1#5353"
+uci add_list dhcp.@dnsmasq[0].server="127.0.0.1#5354"
+uci add_list dhcp.@dnsmasq[0].server="::1#5354"
 uci commit dhcp
+service dnsmasq start
+ 
+# Configure dnsproxy
+uci set dnsproxy.global.enabled="1"
+uci del dnsproxy.global.listen_port
+uci add_list dnsproxy.global.listen_port="5354"
+uci set dnsproxy.cache.enabled="0"  # "1" to enable (Enable this ONLY if you want to test "cache_optimistic" option)
+uci set dnsproxy.cache.cache_optimistic="1"
+uci set dnsproxy.cache.size="2097152"  # Equal to 2 MB (in binary)
+uci del dnsproxy.servers.bootstrap
+uci add_list dnsproxy.servers.bootstrap="8.8.8.8"
+uci add_list dnsproxy.servers.bootstrap="https://dns.google/dns-query"
+uci commit dnsproxy
+
+cat << "EOF" > /etc/sysctl.d/12-buffer-size.conf
+net.core.rmem_max=7500000
+net.core.wmem_max=7500000
+EOF
+sysctl -p /etc/sysctl.d/12-buffer-size.conf
+
+uci del system.ntp.server
+uci add_list system.ntp.server="216.239.35.0"     # time.google.com
+uci add_list system.ntp.server="216.239.35.4"     # time.google.com
+uci add_list system.ntp.server="216.239.35.8"     # time.google.com
+uci add_list system.ntp.server="216.239.35.12"    # time.google.com
+uci add_list system.ntp.server="162.159.200.123"  # time.cloudflare.com
+uci add_list system.ntp.server="162.159.200.1"    # time.cloudflare.com
+uci commit system
+
+# Intercept DNS traffic
+uci -q del firewall.dns_int
+uci set firewall.dns_int="redirect"
+uci set firewall.dns_int.name="Intercept-DNS"
+uci set firewall.dns_int.family="any"
+uci set firewall.dns_int.proto="tcp udp"
+uci set firewall.dns_int.src="lan"
+uci set firewall.dns_int.src_dport="53"
+uci set firewall.dns_int.target="DNAT"
+uci commit firewall
 
 sh /tmp/gen.sh "$wrapped" > /etc/sing-box/config.json
 
 printf "\033[32;1mInstallation done!\033[0m\n"
-service dnsmasq restart && service network restart && service firewall restart && service sing-box restart
+service system restart && service dnsmasq restart && service network restart && service firewall restart && service dnsproxy restart && service sing-box restart
