@@ -53,9 +53,8 @@ jq -n \
       listen_port: 12701,
       tcp_fast_open: true,
       udp_fragment: true
-    },
+    }
   ],
-
   outbounds: [
     {
       type: "vless",
