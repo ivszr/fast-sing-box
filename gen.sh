@@ -45,17 +45,6 @@ jq -n \
   --arg sid    "$SID" \
 '{
   log: { level: "debug" },
-  dns: {
-    servers: [
-      {
-        type: "https",
-        tag: "google-doh",
-
-        server: "8.8.8.8",
-        server_port: 443,
-      }
-    ]
-  },
   inbounds: [
     {
       tag: "tproxy-in",
@@ -65,12 +54,6 @@ jq -n \
       tcp_fast_open: true,
       udp_fragment: true
     },
-    {
-      tag: "dns-in",
-      type: "direct",
-      listen: "127.0.0.1",
-      listen_port: 5353
-    }
   ],
   outbounds: [
     {
@@ -90,10 +73,6 @@ jq -n \
         reality: { enabled: true, public_key: $pbk, short_id: $sid }
       }
     },
-    {
-      type: "direct",
-      tag: "direct"
-    }
   ],
   route: {
     auto_detect_interface: true,
