@@ -82,7 +82,7 @@ uci del dnsproxy.servers.bootstrap
 uci add_list dnsproxy.servers.bootstrap="8.8.8.8"
 uci add_list dnsproxy.servers.bootstrap="tcp://8.8.8.8"
 uci del dnsproxy.servers.upstream
-uci add_list dnsproxy.servers.upstream="https://dns.google/dns-query"
+uci add_list dnsproxy.servers.upstream="https://8.8.8.8/dns-query"
 uci commit dnsproxy
 
 cat << "EOF" > /etc/sysctl.d/12-buffer-size.conf
