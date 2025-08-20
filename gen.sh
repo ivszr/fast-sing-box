@@ -4,28 +4,28 @@ URL=${1//$'\r'/}
 URL=${URL//$'\n'/}
 
 urldecode() {
-    printf '%b' "${1//%/\\x}" | sed 's/+/ /g'
+  printf '%b' "${1//%/\x}" | sed 's/+/ /g'
 }
 
 URL_NOPREFIX=${URL#vless://}
 NOHASH=${URL_NOPREFIX%%#*}
 
-UUID=${NOHASH%%@*}
-HOSTPORT=${NOHASH#*@}
+UUID=${NOHASH%%@}
+HOSTPORT=${NOHASH#@}
 
-HOST=${HOSTPORT%%[:/?]*}
-PORT=${HOSTPORT#*:}
+HOST=${HOSTPORT%%[:/?]}
+PORT=${HOSTPORT#:}
 [ "$PORT" = "$HOSTPORT" ] && PORT=443 || PORT=${PORT%%[/?]*}
 
-QUERY=${HOSTPORT#*\?}
+QUERY=${HOSTPORT#*?}
 [ "$QUERY" != "$HOSTPORT" ] || QUERY=""
 
 get_param() {
-    for kv in ${QUERY//&/ }; do
-        case $kv in
-            $1=*) echo "${kv#*=}" ;;
-        esac
-    done
+  for kv in ${QUERY//&/ }; do
+    case $kv in
+      $1=*) echo "${kv#*=}" ;;
+    esac
+  done
 }
 
 FLOW=$(get_param flow)
@@ -35,16 +35,30 @@ PBK=$(get_param pbk)
 SID=$(get_param sid)
 
 jq -n \
-  --arg server "$HOST" \
-  --arg port   "$PORT" \
-  --arg uuid   "$UUID" \
-  --arg flow   "$FLOW" \
-  --arg sni    "$SNI" \
-  --arg fp     "$FP" \
-  --arg pbk    "$PBK" \
-  --arg sid    "$SID" \
+--arg server "$HOST" \
+--arg port "$PORT" \
+--arg uuid "$UUID" \
+--arg flow "$FLOW" \
+--arg sni "$SNI" \
+--arg fp "$FP" \
+--arg pbk "$PBK" \
+--arg sid "$SID" \
 '{
   log: { level: "debug" },
+
+  dns: {
+    servers: [
+      {
+        tag: "doh",
+        address: "https://1.1.1.1/dns-query",
+        address_resolver: "local",
+        strategy: "ipv4_only"
+      }
+    ],
+    disable_cache: false,
+    disable_expire: false
+  },
+
   inbounds: [
     {
       tag: "tproxy-in",
@@ -53,8 +67,15 @@ jq -n \
       listen_port: 12701,
       tcp_fast_open: true,
       udp_fragment: true
+    },
+    {
+      tag: "dns-in",
+      type: "dns",
+      listen: "127.0.0.1",
+      listen_port: 1053
     }
   ],
+
   outbounds: [
     {
       type: "vless",
@@ -74,8 +95,12 @@ jq -n \
       }
     }
   ],
+
   route: {
     auto_detect_interface: true,
+    rules: [
+      { protocol: "dns", outbound: "dns-out" }
+    ],
     final: "proxy"
   }
 }'
