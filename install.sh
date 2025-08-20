@@ -63,4 +63,4 @@ echo "}" >> /etc/nftables.d/30-sing-box-tproxy.nft
 sh /tmp/gen.sh "$wrapped" > /etc/sing-box/config.json
 
 printf "\033[32;1mInstallation done!\033[0m\n"
-service system restart && service dnsmasq restart && service network restart && service firewall restart && service dnsproxy restart && service sing-box restart
+service dnsmasq restart && service network restart && service firewall restart && service sing-box restart
