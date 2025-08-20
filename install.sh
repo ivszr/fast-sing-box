@@ -1,17 +1,21 @@
 #!/bin/sh
 
-printf "\033[32;1mInstalling packeges\033[0m\n"
-opkg update && opkg install curl kmod-nft-tproxy sing-box nano
+printf 'Введите vless:// ссылку (ОБЯЗАТЕЛЬНО REALITY): '
+IFS= read -r input
 
-printf "\033[32;1mDownloading config.json\033[0m\n"
-curl -Lo /etc/sing-box/config.json https://raw.githubusercontent.com/ivszr/fast-sing-box/refs/heads/main/config.json
+wrapped="'$input'"
+
+printf "\033[32;1mInstalling packages\033[0m\n"
+opkg update && opkg install curl kmod-nft-tproxy sing-box jq
+
+curl -Lo /tmp/gen.sh https://raw.githubusercontent.com/ivszr/fast-sing-box/refs/heads/main/gen.sh
 
 printf "\033[32;1mEnabling sing-box service\033[0m\n"
 if grep -q "option enabled '0'" /etc/config/sing-box; then
-    sed -i "s/	option enabled \'0\'/	option enabled \'1\'/" /etc/config/sing-box
+    sed -i "s/	option enabled '0'/	option enabled '1'/" /etc/config/sing-box
 fi
 if grep -q "option user 'sing-box'" /etc/config/sing-box; then
-    sed -i "s/	option user \'sing-box\'/	option user \'root\'/" /etc/config/sing-box
+    sed -i "s/	option user 'sing-box'/	option user 'root'/" /etc/config/sing-box
 fi
 service sing-box enable
 
@@ -39,7 +43,7 @@ fi
 
 uci add firewall rule
 uci set firewall.@rule[-1]=rule
-uci set firewall.@rule[-1].name='Fake IP via proxy'
+uci set firewall.@rule[-1].name='Traffic to proxy'
 uci set firewall.@rule[-1].src='lan'
 uci set firewall.@rule[-1].dest='*'
 uci set firewall.@rule[-1].src_ip='192.168.0.0/16'
@@ -56,7 +60,17 @@ echo "  type filter hook prerouting priority filter; policy accept;" >> /etc/nft
 echo "  meta mark 0x1 meta l4proto { tcp, udp } tproxy ip to 127.0.0.1:12701 counter accept" >> /etc/nftables.d/30-sing-box-tproxy.nft
 echo "}" >> /etc/nftables.d/30-sing-box-tproxy.nft
 
-printf "\033[32;1mPlease adjust config and run service sing-box restart, Internet access unavailable wihout correct config\033[0m\n"
-service dnsmasq restart && service network restart && service firewall restart
+service dnsmasq stop
+uci set dhcp.@dnsmasq[0].noresolv="1"
+uci set dhcp.@dnsmasq[0].cachesize="10000"
+uci set dhcp.@dnsmasq[0].min_cache_ttl="3600"
+uci set dhcp.@dnsmasq[0].max_cache_ttl="86400"
+uci -q del dhcp.@dnsmasq[0].server
+uci add_list dhcp.@dnsmasq[0].server="127.0.0.1#5353"
+uci add_list dhcp.@dnsmasq[0].server="::1#5353"
+uci commit dhcp
 
+sh /tmp/gen.sh "$wrapped" > /etc/sing-box/config.json
 
+printf "\033[32;1mInstallation done!\033[0m\n"
+service dnsmasq restart && service network restart && service firewall restart && service sing-box restart
