@@ -1,7 +1,7 @@
 #!/bin/sh
 
 printf "\033[32;1mInstalling packeges\033[0m\n"
-opkg update && opkg install curl kmod-nft-tproxy sing-box jq
+opkg update && opkg install curl kmod-nft-tproxy sing-box jq stubby
 
 curl -Lo /tmp/gen.sh https://raw.githubusercontent.com/ivszr/fast-sing-box/refs/heads/main/gen.sh
 
