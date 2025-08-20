@@ -80,7 +80,9 @@ uci set dnsproxy.cache.cache_optimistic="1"
 uci set dnsproxy.cache.size="2097152"  # Equal to 2 MB (in binary)
 uci del dnsproxy.servers.bootstrap
 uci add_list dnsproxy.servers.bootstrap="8.8.8.8"
-uci add_list dnsproxy.servers.bootstrap="https://dns.google/dns-query"
+uci add_list dnsproxy.servers.bootstrap="tcp://8.8.8.8"
+uci del dnsproxy.servers.upstream
+uci add_list dnsproxy.servers.upstream="https://dns.google/dns-query"
 uci commit dnsproxy
 
 cat << "EOF" > /etc/sysctl.d/12-buffer-size.conf
