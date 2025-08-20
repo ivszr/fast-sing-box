@@ -60,10 +60,6 @@ echo "  type filter hook prerouting priority filter; policy accept;" >> /etc/nft
 echo "  meta mark 0x1 meta l4proto { tcp, udp } tproxy ip to 127.0.0.1:12701 counter accept" >> /etc/nftables.d/30-sing-box-tproxy.nft
 echo "}" >> /etc/nftables.d/30-sing-box-tproxy.nft
 
-uci set dhcp.@dnsmasq[0].noresolv="1"
-uci -q del dhcp.@dnsmasq[0].server
-uci add_list dhcp.@dnsmasq[0].server="127.0.0.1#1053"
-
 sh /tmp/gen.sh "$wrapped" > /etc/sing-box/config.json
 
 printf "\033[32;1mInstallation done!\033[0m\n"
