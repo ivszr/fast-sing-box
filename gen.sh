@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/ash
 
 URL=${1//$'\r'/}
 URL=${URL//$'\n'/}
@@ -53,7 +53,7 @@ jq -n \
       listen_port: 12701,
       tcp_fast_open: true,
       udp_fragment: true
-    },
+    }
   ],
   outbounds: [
     {
@@ -72,7 +72,7 @@ jq -n \
         utls: { enabled: true, fingerprint: $fp },
         reality: { enabled: true, public_key: $pbk, short_id: $sid }
       }
-    },
+    }
   ],
   route: {
     auto_detect_interface: true,
