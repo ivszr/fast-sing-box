@@ -1,74 +1,281 @@
+#!/usr/bin/env sh
+
+NEED_UPDATE=1
+DEPENDENCIES="sing-box kmod-nft-tproxy"
+
+get_timestamp() {
+  format="$1"
+  date +"$format"
+}
+
+log_message() {
+  log_level="$1"
+  message="$2"
+  timestamp=$(get_timestamp "%d.%m.%Y %H:%M:%S")
+  echo "[$timestamp] [$log_level]: $message"
+}
+
+is_installed() {
+  opkg list-installed | grep -qo "$1"
+}
+
+check_updates() {
+  if [ "$NEED_UPDATE" -eq "1" ]; then
+    log_message "INFO" "Updating package list"
+    opkg update >/dev/null
+    NEED_UPDATE=0
+  fi
+}
+
+install_dependencies() {
+  for package in $DEPENDENCIES; do
+    if ! is_installed "$package"; then
+      check_updates
+      log_message "INFO" "Installing $package"
+      opkg install "$package" >/dev/null
+    fi
+  done
+}
+
+configure_sing_box_service() {
+  sing_box_enabled=$(uci -q get sing-box.main.enabled)
+  sing_box_user=$(uci -q get sing-box.main.user)
+
+  if [ "$sing_box_enabled" != "1" ]; then
+    log_message "INFO" "Enabling sing-box service"
+    uci -q set sing-box.main.enabled=1
+    uci commit sing-box
+  fi
+
+  if [ "$sing_box_user" != "root" ]; then
+    log_message "INFO" "Setting sing-box user to root"
+    uci -q set sing-box.main.user=root
+    uci commit sing-box
+  fi
+}
+
+configure_dhcp() {
+  is_noresolv_enabled=$(uci -q get dhcp.@dnsmasq[0].noresolv || echo "0")
+  is_filter_aaaa_enabled=$(uci -q get dhcp.@dnsmasq[0].filter_aaaa || echo "0")
+  is_locause_disabled=$(uci -q get dhcp.@dnsmasq[0].localuse || echo "1")
+  dhcp_server_ip="127.0.0.1#5353"
+
+  if [ "$is_noresolv_enabled" -ne "1" ]; then
+    log_message "INFO" "Enabling noresolv option in DHCP config"
+    uci -q set dhcp.@dnsmasq[0].noresolv=1
+    uci commit dhcp
+  fi
+
+  if [ "$is_filter_aaaa_enabled" -ne "1" ]; then
+    log_message "INFO" "Enabling filter_aaaa option in DHCP config"
+    uci -q set dhcp.@dnsmasq[0].filter_aaaa=1
+    uci commit dhcp
+  fi
+
+  if [ "$is_locause_disabled" -ne "0" ]; then
+    log_message "INFO" "Disabling localuse option in DHCP config"
+    uci -q set dhcp.@dnsmasq[0].localuse=0
+    uci commit dhcp
+  fi
+
+  log_message "INFO" "Pointing dnsmasq to $dhcp_server_ip"
+  uci -q delete dhcp.@dnsmasq[0].server
+  uci -q add_list dhcp.@dnsmasq[0].server="$dhcp_server_ip"
+  uci commit dhcp
+}
+
+configure_network() {
+  if [ -z "$(uci -q get network.@rule[0])" ]; then
+    log_message "INFO" "Creating marking rule"
+    uci batch <<EOI
+add network rule
+set network.@rule[0].name='mark0x1'
+set network.@rule[0].mark='0x1'
+set network.@rule[0].priority='100'
+set network.@rule[0].lookup='100'
+EOI
+    uci commit network
+  fi
+}
+
+configure_nftables() {
+  log_message "INFO" "Configuring nftables & hotplug"
+  mkdir -p /etc/nftables.d
+  mkdir -p /etc/hotplug.d/iface
+
+  cat > /etc/hotplug.d/iface/30-tproxy <<'EOF'
 #!/bin/sh
+ip route add local default dev lo table 100
+EOF
+  chmod +x /etc/hotplug.d/iface/30-tproxy
 
-printf "\033[32;1mInstalling packeges\033[0m\n"
-opkg update && opkg install curl kmod-nft-tproxy sing-box jq stubby
+  cat > /etc/nftables.d/30-sing-box-tproxy.nft <<'EOF'
+chain tproxy_marked {
+  type filter hook prerouting priority filter; policy accept;
+  meta mark 0x1 meta l4proto { tcp, udp } tproxy ip to 127.0.0.1:12701 counter accept
+}
+EOF
+}
 
-curl -Lo /tmp/gen.sh https://raw.githubusercontent.com/ivszr/fast-sing-box/refs/heads/main/gen.sh
+configure_firewall() {
+  log_message "INFO" "Configuring firewall rules"
+  uci add firewall rule >/dev/null
+  uci set firewall.@rule[-1].name='To proxy'
+  uci set firewall.@rule[-1].src='lan'
+  uci set firewall.@rule[-1].dest='*'
+  uci set firewall.@rule[-1].src_ip='192.168.0.0/16'
+  uci set firewall.@rule[-1].dest_ip='!192.168.0.0/16'
+  uci add_list firewall.@rule[-1].proto='tcp'
+  uci add_list firewall.@rule[-1].proto='udp'
+  uci set firewall.@rule[-1].target='MARK'
+  uci set firewall.@rule[-1].set_mark='0x1'
+  uci set firewall.@rule[-1].family='ipv4'
+  uci commit firewall
+}
 
-printf 'Введите vless:// ссылку (ОБЯЗАТЕЛЬНО REALITY): '
-IFS= read -r input
+configure_sing_box() {
+  log_message "INFO" "Requesting vless:// reality link from user"
+  printf "Enter your vless:// reality link:\n"
+  read -r URL
 
-wrapped="'$input'"
+  # --- парсер VLESS ссылки ---
+  URL=${URL//$'\r'/}
+  URL=${URL//$'\n'/}
 
-printf "\033[32;1mEnabling sing-box service\033[0m\n"
-if grep -q "option enabled '0'" /etc/config/sing-box; then
-    sed -i "s/	option enabled \'0\'/	option enabled \'1\'/" /etc/config/sing-box
-fi
-if grep -q "option user 'sing-box'" /etc/config/sing-box; then
-    sed -i "s/	option user \'sing-box\'/	option user \'root\'/" /etc/config/sing-box
-fi
-service sing-box enable
+  urldecode() {
+      printf '%b' "${1//%/\\x}" | sed 's/+/ /g'
+  }
 
-printf "\033[32;1mConfigure network\033[0m\n"
-rule_id=$(uci show network | grep -E '@rule.*name=.mark0x1.' | awk -F '[][{}]' '{print $2}' | head -n 1)
-if [ ! -z "$rule_id" ]; then
-    while uci -q delete network.@rule[$rule_id]; do :; done
-fi
+  URL_NOPREFIX=${URL#vless://}
+  NOHASH=${URL_NOPREFIX%%#*}
 
-uci add network rule
-uci set network.@rule[-1].name='mark0x1'
-uci set network.@rule[-1].mark='0x1'
-uci set network.@rule[-1].priority='100'
-uci set network.@rule[-1].lookup='100'
-uci commit network
+  UUID=${NOHASH%%@*}
+  HOSTPORT=${NOHASH#*@}
 
-echo "#!/bin/sh" > /etc/hotplug.d/iface/30-tproxy
-echo "ip route add local default dev lo table 100" >> /etc/hotplug.d/iface/30-tproxy
+  HOST=${HOSTPORT%%[:/?]*}
+  PORT=${HOSTPORT#*:}
+  [ "$PORT" = "$HOSTPORT" ] && PORT=443 || PORT=${PORT%%[/?]*}
 
-uci set dhcp.@dnsmasq[0].noresolv="1"
-uci -q delete dhcp.@dnsmasq[0].server
-uci add_list dhcp.@dnsmasq[0].server="127.0.0.1#5453"
-uci add_list dhcp.@dnsmasq[0].server='/use-application-dns.net/'
-uci commit dhcp
+  QUERY=${HOSTPORT#*\?}
+  [ "$QUERY" != "$HOSTPORT" ] || QUERY=""
 
-printf "\033[32;1mConfigure firewall\033[0m\n"
-rule_id2=$(uci show firewall | grep -E '@rule.*name=.Fake IP via proxy.' | awk -F '[][{}]' '{print $2}' | head -n 1)
-if [ ! -z "$rule_id2" ]; then
-    while uci -q delete firewall.@rule[$rule_id2]; do :; done
-fi
+  get_param() {
+      for kv in ${QUERY//&/ }; do
+          case $kv in
+              $1=*) echo "${kv#*=}" ;;
+          esac
+      done
+  }
 
-uci add firewall rule
-uci set firewall.@rule[-1]=rule
-uci set firewall.@rule[-1].name='Internet via proxy'
-uci set firewall.@rule[-1].src='lan'
-uci set firewall.@rule[-1].dest='*'
-uci set firewall.@rule[-1].src_ip='192.168.0.0/16'
-uci set firewall.@rule[-1].dest_ip='!192.168.0.0/16'
-uci add_list firewall.@rule[-1].proto='tcp'
-uci add_list firewall.@rule[-1].proto='udp'
-uci set firewall.@rule[-1].target='MARK'
-uci set firewall.@rule[-1].set_mark='0x1'
-uci set firewall.@rule[-1].family='ipv4'
-uci commit firewall
+  FLOW=$(get_param flow)
+  SNI=$(get_param sni)
+  FP=$(get_param fp)
+  PBK=$(get_param pbk)
+  SID=$(get_param sid)
 
-echo "chain tproxy_marked {" > /etc/nftables.d/30-sing-box-tproxy.nft
-echo "  type filter hook prerouting priority filter; policy accept;" >> /etc/nftables.d/30-sing-box-tproxy.nft
-echo "  meta mark 0x1 meta l4proto { tcp, udp } tproxy ip to 127.0.0.1:12701 counter accept" >> /etc/nftables.d/30-sing-box-tproxy.nft
-echo "}" >> /etc/nftables.d/30-sing-box-tproxy.nft
+  log_message "INFO" "Generating /etc/sing-box/config.json"
+  cat > /etc/sing-box/config.json <<EOF
+{
+  "log": {
+    "level": "debug"
+  },
+  "dns": {
+    "strategy": "ipv4_only",
+    "independent_cache": true,
+    "final": "dns-server",
+    "servers": [
+      {
+        "tag": "dns-server",
+        "address": "https://8.8.8.8/dns-query",
+        "detour": "direct-out"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "type": "tproxy",
+      "listen": "::",
+      "listen_port": 12701,
+      "sniff": false
+    },
+    {
+      "tag": "dns-in",
+      "type": "direct",
+      "listen": "127.0.0.1",
+      "listen_port": 5353
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct-out",
+      "type": "direct"
+    },
+    {
+      "type": "vless",
+      "tag": "proxy",
+      "server": "$HOST",
+      "server_port": $PORT,
+      "uuid": "$UUID",
+      "flow": "$FLOW",
+      "tls": {
+        "enabled": true,
+        "server_name": "$SNI",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "$FP"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "$PBK",
+          "short_id": "$SID"
+        }
+      }
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "inbound": [
+          "dns-in",
+          "tproxy-in"
+        ],
+        "action": "sniff"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      }
+    ],
+    "auto_detect_interface": true,
+    "final": "proxy"
+  }
+}
+EOF
+}
 
-sh /tmp/gen.sh "$wrapped" > /etc/sing-box/config.json
+restart_service() {
+  service="$1"
+  log_message "INFO" "Restarting $service service"
+  /etc/init.d/$service restart
+}
 
-service dnsmasq restart && service network restart && service firewall restart
-service sing-box restart
+print_post_install_message() {
+  printf "\nInstallation completed successfully ✅\n"
+}
 
+main() {
+  install_dependencies
+  configure_sing_box_service
+  configure_dhcp
+  configure_network
+  configure_nftables
+  configure_firewall
+  configure_sing_box
+  restart_service "network"
+  restart_service "dnsmasq"
+  restart_service "firewall"
+  restart_service "sing-box"
+  print_post_install_message
+}
 
+main
