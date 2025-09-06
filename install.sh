@@ -181,13 +181,24 @@ configure_sing_box() {
   },
   "dns": {
     "strategy": "ipv4_only",
+    "final": "proxy-dns",
     "independent_cache": true,
-    "final": "dns-server",
     "servers": [
       {
-        "tag": "dns-server",
+        "tag": "bootstrap-dns",
         "address": "https://8.8.8.8/dns-query",
         "detour": "direct-out"
+      },
+      {
+        "tag": "proxy-dns",
+        "address": "https://8.8.8.8/dns-query",
+        "detour": "proxy"
+      }
+    ],
+    "rules": [
+      {
+        "domain": ["$HOST"],
+        "server": "bootstrap-dns"
       }
     ]
   },
