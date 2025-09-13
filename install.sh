@@ -258,6 +258,12 @@ configure_sing_box() {
     ],
     "auto_detect_interface": true,
     "final": "proxy"
+  },
+  "experimental": {
+    "clash_api": {
+      "external_ui": "ui",
+      "external_controller": "0.0.0.0:9090"
+    }
   }
 }
 EOF
