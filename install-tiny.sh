@@ -261,6 +261,7 @@ configure_sing_box() {
   }
 }
 EOF
+}
 
 restart_service() {
   service="$1"
