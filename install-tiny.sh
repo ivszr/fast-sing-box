@@ -259,8 +259,8 @@ configure_sing_box() {
     "auto_detect_interface": true,
     "final": "proxy"
   }
-EOF
 }
+EOF
 
 restart_service() {
   service="$1"
