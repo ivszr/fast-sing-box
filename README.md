@@ -2,3 +2,7 @@
 ```
 sh <(wget -O - https://raw.githubusercontent.com/ivszr/fast-sing-box/refs/heads/main/install.sh)
 ```
+## Tiny версия для роутеров, с малым обьёмом ПЗУ
+```
+sh <(wget -O - https://raw.githubusercontent.com/ivszr/fast-sing-box/refs/heads/main/install.sh)
+```
