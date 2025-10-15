@@ -54,6 +54,18 @@ configure_sing_box_service() {
   fi
 }
 
+configure_ntp() {
+ log_message "INFO" "Configuring NTP servers"
+ uci -q delete system.ntp.server
+ uci -q add_list system.ntp.server="216.239.35.0"
+ uci -q add_list system.ntp.server="216.239.35.4"
+ uci -q add_list system.ntp.server="216.239.35.8"
+ uci -q add_list system.ntp.server="216.239.35.12"
+ uci -q add_list system.ntp.server="162.159.200.123"
+ uci -q add_list system.ntp.server="162.159.200.1"
+ uci -q commit system
+}
+
 configure_dhcp() {
   is_noresolv_enabled=$(uci -q get dhcp.@dnsmasq[0].noresolv || echo "0")
   is_filter_aaaa_enabled=$(uci -q get dhcp.@dnsmasq[0].filter_aaaa || echo "0")
@@ -72,9 +84,9 @@ configure_dhcp() {
     uci commit dhcp
   fi
 
-  if [ "$is_locause_disabled" -ne "0" ]; then
-    log_message "INFO" "Disabling localuse option in DHCP config"
-    uci -q set dhcp.@dnsmasq[0].localuse=0
+  if [ "$is_locause_disabled" -ne "1" ]; then
+    log_message "INFO" "Enabling localuse option in DHCP config"
+    uci -q set dhcp.@dnsmasq[0].localuse=1
     uci commit dhcp
   fi
 
@@ -276,6 +288,7 @@ print_post_install_message() {
 main() {
   install_dependencies
   configure_sing_box_service
+  configure_ntp
   configure_dhcp
   configure_network
   configure_nftables
